@@ -93,6 +93,17 @@ class VAE(nn.Module):
         return self.decode1(z1)
 
     @staticmethod
+    def alpha_schedule(epoch):
+        if epoch < 40:
+            alpha = epoch / 40.0
+        elif epoch < 50:
+            alpha = 1.0
+        else:
+            alpha = max(0.25, 1.0 - (epoch - 50) / 50.0)
+        return alpha
+
+
+    @staticmethod
     def beta_schedule(epoch):
         if epoch < 20:
             beta = epoch / 20.0
