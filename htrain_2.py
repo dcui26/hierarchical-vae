@@ -1,4 +1,4 @@
-from hvae_2 import VAE
+from hvae2_ab import VAE
 import torch
 from torchvision import datasets
 from torch.utils.data import DataLoader
@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
-writer = SummaryWriter('/content/drive/MyDrive/Colab Notebooks/VAE_CIFAR10/runs/hvae2_cifar10/')
+writer = SummaryWriter('/content/drive/MyDrive/Colab Notebooks/VAE_CIFAR10/runs/hvae2_ab_cifar10/')
 
 transform = transforms.Compose([
     transforms.ToTensor(), #convert to 0-1
@@ -39,7 +39,7 @@ epochs = 100
 model = VAE().to(device)
 optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
 
-save_path = '/content/drive/MyDrive/Colab Notebooks/VAE_CIFAR10/models/hvae2/'
+save_path = '/content/drive/MyDrive/Colab Notebooks/VAE_CIFAR10/models/hvae2_ab/'
 import os
 os.makedirs(save_path, exist_ok=True)
 loss_history = []
@@ -50,12 +50,13 @@ for epoch in range(epochs):
     epoch_middle = 0
     epoch_kl_z2 = 0
     beta = VAE.beta_schedule(epoch)
+    alpha = VAE.alpha_schedule(epoch)
     for images, _ in loaded_train:
         batchsize = images.shape[0]
         images = images.to(device)
         pred, z1, mu1, logvar1, mu2, logvar2, dmu1, dlogvar1 = model(images)
         recon, middle, kl_z2 = VAE.compute_loss(pred, images, z1, mu1, logvar1, mu2, logvar2, dmu1, dlogvar1)
-        loss = (recon - beta * middle + beta * kl_z2) / batchsize
+        loss = (recon - alpha * middle + beta * kl_z2) / batchsize
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -69,7 +70,9 @@ for epoch in range(epochs):
     writer.add_scalar("Loss/reconstruction", epoch_recon, epoch)
     writer.add_scalar("Loss/middle", epoch_middle, epoch)
     writer.add_scalar("Loss/KL_z2", epoch_kl_z2, epoch)
-    writer.add_scalar("Beta", beta, epoch)
+    writer.add_scalar("Scheduled/Beta", beta, epoch)
+    writer.add_scalar("Scheduled/Alpha", alpha, epoch)
+
     writer.flush()
     print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.3f}, Recon: {epoch_recon:.3f}, Middle: {epoch_middle:.3f}, KL_2z: {epoch_kl_z2:.3f}")
 
@@ -86,5 +89,5 @@ for epoch in range(epochs):
             generated_vis = (generated + 1) / 2
             writer.add_images('Generated', generated_vis, epoch)
 
-torch.save(model.state_dict(), save_path + 'hvae2.pth')
+torch.save(model.state_dict(), save_path + 'hvae2_ab.pth')
 writer.close()
