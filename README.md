@@ -4,21 +4,18 @@ In this project, I derived the ELBO for both a standard VAE and a two-layer hier
 
 ## Key Ideas
 
-**Beta Scheduling:** I used a beta schedule that ramps from 0 to 1 over the first 20 epochs, holds at 1 for 10 epochs, then decays to 0.4.
-The ramp-up prevents posterior collapse by letting the encoder-decoder coupling form before KL regularization kicks in.
-The decay relaxes the KL constraint in slowly from 30 epochs to the end, allowing the encoder to retain more information and improve reconstruction quality.
+**Beta Scheduling:** I used a beta schedule that ramps from 0 to 1 over the first 20 epochs, holds at 1 for 10 epochs, then decays to 0.4. The ramp-up prevents posterior collapse by letting the encoder-decoder coupling form before KL regularization kicks in. The decay relaxes the KL constraint slowly from epoch 30 onward, allowing the encoder to retain more information and improve reconstruction quality.
 
-**Hierarchical VAE:** The standard VAE forces the encoder toward a rigid N(0, I) prior, limiting how much information the latent code can carry.
-The hierarchical VAE replaces this with a learned, context-dependent prior: a second latent layer z2 captures high-level structure, and a decoder produces a flexible prior for z1 conditioned on z2.
-This relaxes the information bottleneck in theory, allowing for more expressive information retention.
+**Hierarchical VAE:** The standard VAE forces the encoder toward a rigid N(0, I) prior, limiting how much information the latent state can carry. The hierarchical VAE replaces this with a learned, context-dependent prior: a second latent layer z2 captures high-level structure, and a decoder produces a flexible prior for z1 conditioned on z2. This relaxes the information bottleneck, allowing for more expressive latent representations. During training, the encoder's z1 is passed directly to the decoder for reconstruction, while the learned prior only influences training through the loss function. At generation time, z1 is sampled from the learned prior since no encoder is available.
+
+**Staggered Alpha-Beta Scheduling:** A naive hierarchical VAE with a single beta schedule underperformed the standard VAE on both metrics (reconstruction: 33,069, FID: 120.9). I observed that the middle KL term (which aligns the learned prior with the encoder) depends on z2 being well-structured, so ramping both constraints at the same rate not optimal. I designed a staggered schedule: beta controls KL on z2 with the standard schedule, while a separate alpha controls the middle term with a delayed ramp (peaking at epoch 40 instead of 20) and a lower floor (0.25 vs 0.4). This gives z2 time to organize before the prior alignment term demands that it be useful, and the lower floor gives the encoder more freedom to retain information, improving reconstruction at the cost of weaker prior alignment for generation.
 
 ## Results
 
-| Model | Reconstruction Loss | FID Score |
-|-------|---------------------|-----------|
-| VAE   | 30,291              | 105.5     |
-| HVAE  | 33,069              | 120.9     |
+|      Model       | Reconstruction Loss | FID Score |
+|------------------|---------------------|-----------|
+| VAE              | 30,291              | 105.5     |
+| HVAE (beta only) | 33,069              | 120.9     |
+| HVAE (alpha-beta)| 27,717              | 116.2     |
 
-The single-layer VAE outperformed the hierarchical VAE on both metrics.
-I speculate that the theoretical advantage of flexible learned priors requires deeper architectures with more complex design choices (convolutional latents, residual connections, 30+ layers as in NVAE/VDVAE) to be obtained.
-At this scale of my project, the optimization complexity of coordinating four networks outweighs the benefit of the relaxed information bottleneck.
+The staggered scheduling improved reconstruction loss by 8.5% over the single-layer VAE baseline, demonstrating that the hierarchical architecture can outperform a standard VAE when the training dynamics are managed properly. However, the FID score remained higher, which reveals a reconstruction-generation tradeoff: the lower alpha floor gave the encoder more freedom to encode information (improving reconstruction) at the cost of weaker prior alignment (hurting generation). I believe that realizing the full potential of hierarchical VAEs requires deeper architectures with convolutional latents, residual connections, and careful engineering, as demonstrated by models like NVAE and VDVAE.
